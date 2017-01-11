@@ -9,6 +9,15 @@ int compare( const void* a, const void* b)
    return ( *(int*)b - *(int*)a );
 }
 
+/*
+  http://stackoverflow.com/questions/5309471/getting-file-extension-in-c
+*/
+const char *get_filename_ext(const char *filename) {
+    const char *dot = strrchr(filename, '.');
+    if(!dot || dot == filename) return "";
+    return dot + 1;
+}
+
 void paint(Image **image, ImageInfo **image_info, double gaussian_multiplier, int brushes[], int brushes_size)
 {
   ExceptionInfo *exception;
@@ -18,6 +27,18 @@ void paint(Image **image, ImageInfo **image_info, double gaussian_multiplier, in
   Image *temp_image;
   ImageInfo *original_image_info = *image_info;
   DrawInfo* draw_info;
+
+
+  /*
+    Extract Filename and Extension
+  */
+    const char *original_image_extension;
+    original_image_extension = get_filename_ext(original_image_info->filename);
+
+    char original_image_basename[MaxTextExtent];
+    unsigned long basename_length = (original_image_extension - original_image_info->filename)/sizeof(original_image_info->filename[0]);
+    strncpy(original_image_basename, original_image_info->filename, basename_length);
+    original_image_basename[basename_length-1] = '\0';
 
   int i;
   for (i = 0; i < brushes_size; ++i) {
@@ -57,7 +78,7 @@ void paint(Image **image, ImageInfo **image_info, double gaussian_multiplier, in
     /*
       Write the image.
     */
-      snprintf(temp_image->filename, MaxTextExtent, "%s%s%0.2lf%s", "test", "_gaussian_blur_", gaussian_blur_sigma, ".jpg");
+      snprintf(temp_image->filename, MaxTextExtent, "%s%s%0.2lf.%s", original_image_basename, "_gaussian_blur_", gaussian_blur_sigma, original_image_extension);
       WriteImage(original_image_info, temp_image, exception);
       if (exception->severity != UndefinedException)
         CatchException(exception);
