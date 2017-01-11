@@ -9,7 +9,7 @@ int compare( const void* a, const void* b)
    return ( *(int*)b - *(int*)a );
 }
 
-void paint(Image **image, ImageInfo **image_info, int brushes[], int brushes_size)
+void paint(Image **image, ImageInfo **image_info, double gaussian_multiplier, int brushes[], int brushes_size)
 {
   ExceptionInfo *exception;
   exception = AcquireExceptionInfo();
@@ -24,7 +24,8 @@ void paint(Image **image, ImageInfo **image_info, int brushes[], int brushes_siz
     /*
       Apply a Gaussian Blur to the Image
     */
-      temp_image = GaussianBlurImage(original_image, 0, brushes[i], exception);
+      double gaussian_blur_sigma = gaussian_multiplier * brushes[i];
+      temp_image = GaussianBlurImage(original_image, 0, gaussian_blur_sigma, exception);
       if (temp_image == (Image *) NULL)
         MagickError(exception->severity, exception->reason, exception->description);
 
@@ -35,7 +36,7 @@ void paint(Image **image, ImageInfo **image_info, int brushes[], int brushes_siz
 
       // TODO: @aramael Refactor to Remove the Buffer & Use Native ImageMagick Annotate Tools
       char buffer[MaxTextExtent];
-      snprintf(buffer, MaxTextExtent, "cennini v%s\nFile: %s\nW: %zu H: %zu\nGaussian Blur: %d", "0.0.0", original_image_info->filename, original_image->columns, original_image->rows, brushes[0]);
+      snprintf(buffer, MaxTextExtent, "cennini v%s\nFile: %s\nW: %zu H: %zu\nGaussian Blur: %lf", "0.0.0", original_image_info->filename, original_image->columns, original_image->rows, gaussian_blur_sigma);
       CloneString(&draw_info->text, buffer);
 
       draw_info->pointsize = 12;
@@ -56,7 +57,7 @@ void paint(Image **image, ImageInfo **image_info, int brushes[], int brushes_siz
     /*
       Write the image.
     */
-      snprintf(temp_image->filename, MaxTextExtent, "%s%s%d%s", "test", "_gaussian_blur_", brushes[i], ".jpg");
+      snprintf(temp_image->filename, MaxTextExtent, "%s%s%0.2lf%s", "test", "_gaussian_blur_", gaussian_blur_sigma, ".jpg");
       WriteImage(original_image_info, temp_image, exception);
       if (exception->severity != UndefinedException)
         CatchException(exception);
@@ -100,7 +101,7 @@ int main(int argc,char **argv)
   */
     int brushes[] = {10, 20, 30};
     qsort(brushes, sizeof(brushes)/sizeof(brushes[0]), sizeof(int), compare);
-    paint(&image, &image_info, brushes, sizeof(brushes)/sizeof(brushes[0]));
+    paint(&image, &image_info, 1.0, brushes, sizeof(brushes)/sizeof(brushes[0]));
 
   /*
     Destroy the image and exit.
