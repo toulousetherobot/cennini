@@ -154,10 +154,11 @@ const char *get_filename_ext(const char *filename) {
     return dot + 1;
 }
 
-void paint(Image *image, ImageInfo *image_info, double gaussian_multiplier, int brushes[], int brushes_size)
+void paint(Image *image, ImageInfo *image_info, double gaussian_multiplier, int brushes[], int brushes_size, ExceptionInfo *exception)
 {
-  ExceptionInfo *exception;
-  exception = AcquireExceptionInfo();
+  // Check if Exception is Properly Defined
+  assert(exception != (ExceptionInfo *) NULL);
+  assert(exception->signature == MagickCoreSignature);
 
   Image *reference;
   DrawInfo* draw_info;
@@ -261,7 +262,9 @@ int main(int argc,char **argv)
   */
     int brushes[] = {10, 20, 30};
     qsort(brushes, sizeof(brushes)/sizeof(brushes[0]), sizeof(int), compare);
-    paint(image, image_info, 1.0, brushes, sizeof(brushes)/sizeof(brushes[0]));
+    paint(image, image_info, 1.0, brushes, sizeof(brushes)/sizeof(brushes[0]), exception);
+    if (exception->severity != UndefinedException)
+      CatchException(exception);
 
   /*
     Destroy the image and exit.
