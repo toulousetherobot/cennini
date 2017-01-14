@@ -161,7 +161,7 @@ void paint(Image *image, ImageInfo *image_info, double gaussian_multiplier, int 
   assert(exception->signature == MagickCoreSignature);
 
   Image *reference;
-  DrawInfo* draw_info;
+  DrawInfo* draw_info, *canvas_draw_info;
 
   /*
     Extract Filename and Extension
@@ -192,7 +192,7 @@ void paint(Image *image, ImageInfo *image_info, double gaussian_multiplier, int 
         MagickError(exception->severity, exception->reason, exception->description);
 
     /*
-      Annotate Image for Diagonistic Purposes
+      Annotate ReferenceImage for Diagonistic Purposes
     */
       draw_info = CloneDrawInfo(image_info, (DrawInfo*) NULL);
 
@@ -217,10 +217,28 @@ void paint(Image *image, ImageInfo *image_info, double gaussian_multiplier, int 
         CatchException(exception);
 
     /*
+      Annotate Current Canvas Image for Diagonistic Purposes
+    */
+      canvas_draw_info = CloneDrawInfo(image_info, draw_info);
+
+      // TODO: @aramael Refactor to Remove the Buffer & Use Native ImageMagick Annotate Tools
+      snprintf(buffer, MaxTextExtent, "cennini v%s\nFile: %s\nW: %zu H: %zu\nCanvas w/ Gaussian Reference: %lf", "0.0.0", image_info->filename, image->columns, image->rows, gaussian_blur_sigma);
+      CloneString(&canvas_draw_info->text, buffer);
+
+      AnnotateImage(canvas, canvas_draw_info, exception);
+      if (exception->severity != UndefinedException)
+        CatchException(exception);
+
+    /*
       Write the image.
     */
       snprintf(reference->filename, MaxTextExtent, "%s%s%0.2lf.%s", image_basename, "_gaussian_blur_", gaussian_blur_sigma, image_extension);
       WriteImage(image_info, reference, exception);
+      if (exception->severity != UndefinedException)
+        CatchException(exception);
+
+      snprintf(canvas->filename, MaxTextExtent, "%s%s%0.2lf.%s", image_basename, "_canvas_after_", gaussian_blur_sigma, image_extension);
+      WriteImage(image_info, canvas, exception);
       if (exception->severity != UndefinedException)
         CatchException(exception);
 
