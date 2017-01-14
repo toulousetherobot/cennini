@@ -154,51 +154,50 @@ const char *get_filename_ext(const char *filename) {
     return dot + 1;
 }
 
-void paint(Image **image, ImageInfo **image_info, double gaussian_multiplier, int brushes[], int brushes_size)
+void paint(Image *image, ImageInfo *image_info, double gaussian_multiplier, int brushes[], int brushes_size)
 {
   ExceptionInfo *exception;
   exception = AcquireExceptionInfo();
 
-  Image *original_image = *image;
-  Image *temp_image;
-  ImageInfo *original_image_info = *image_info;
+  Image *reference;
   DrawInfo* draw_info;
 
   /*
     Extract Filename and Extension
   */
-    const char *original_image_extension;
-    original_image_extension = get_filename_ext(original_image_info->filename);
+    const char *image_extension;
+    image_extension = get_filename_ext(image_info->filename);
 
-    char original_image_basename[MaxTextExtent];
-    unsigned long basename_length = (original_image_extension - original_image_info->filename)/sizeof(original_image_info->filename[0]);
-    strncpy(original_image_basename, original_image_info->filename, basename_length);
-    original_image_basename[basename_length-1] = '\0';
+    char image_basename[MaxTextExtent];
+    unsigned long basename_length = (image_extension - image_info->filename)/sizeof(image_info->filename[0]);
+    strncpy(image_basename, image_info->filename, basename_length);
+    image_basename[basename_length-1] = '\0';
 
   /*
     Create an Empy Canvas
   */
     Image *canvas;
-    canvas = BlankCanvasFromImage(original_image, 65535.0, exception);
+    canvas = BlankCanvasFromImage(image, 65535.0, exception);
 
   int i;
   for (i = 0; i < brushes_size; ++i) {
+
     /*
       Apply a Gaussian Blur to the Image
     */
       double gaussian_blur_sigma = gaussian_multiplier * brushes[i];
-      temp_image = GaussianBlurImage(original_image, 0, gaussian_blur_sigma, exception);
-      if (temp_image == (Image *) NULL)
+      reference = GaussianBlurImage(image, 0, gaussian_blur_sigma, exception);
+      if (reference == (Image *) NULL)
         MagickError(exception->severity, exception->reason, exception->description);
 
     /*
       Annotate Image for Diagonistic Purposes
     */
-      draw_info = CloneDrawInfo(original_image_info, (DrawInfo*) NULL);
+      draw_info = CloneDrawInfo(image_info, (DrawInfo*) NULL);
 
       // TODO: @aramael Refactor to Remove the Buffer & Use Native ImageMagick Annotate Tools
       char buffer[MaxTextExtent];
-      snprintf(buffer, MaxTextExtent, "cennini v%s\nFile: %s\nW: %zu H: %zu\nGaussian Blur: %lf", "0.0.0", original_image_info->filename, original_image->columns, original_image->rows, gaussian_blur_sigma);
+      snprintf(buffer, MaxTextExtent, "cennini v%s\nFile: %s\nW: %zu H: %zu\nGaussian Blur: %lf", "0.0.0", image_info->filename, image->columns, image->rows, gaussian_blur_sigma);
       CloneString(&draw_info->text, buffer);
 
       draw_info->pointsize = 12;
@@ -212,22 +211,22 @@ void paint(Image **image, ImageInfo **image_info, double gaussian_multiplier, in
       draw_info->fill.green = 0;
       draw_info->fill.blue  = 0;
 
-      AnnotateImage(temp_image, draw_info, exception);
+      AnnotateImage(reference, draw_info, exception);
       if (exception->severity != UndefinedException)
         CatchException(exception);
 
     /*
       Write the image.
     */
-      snprintf(temp_image->filename, MaxTextExtent, "%s%s%0.2lf.%s", original_image_basename, "_gaussian_blur_", gaussian_blur_sigma, original_image_extension);
-      WriteImage(original_image_info, temp_image, exception);
+      snprintf(reference->filename, MaxTextExtent, "%s%s%0.2lf.%s", image_basename, "_gaussian_blur_", gaussian_blur_sigma, image_extension);
+      WriteImage(image_info, reference, exception);
       if (exception->severity != UndefinedException)
         CatchException(exception);
 
-    DestroyImage(temp_image);
+    DestroyImage(reference);
   }
 
-  DestroyImage(original_image);
+  DestroyImage(image);
 }
 
 int main(int argc,char **argv)
@@ -262,7 +261,7 @@ int main(int argc,char **argv)
   */
     int brushes[] = {10, 20, 30};
     qsort(brushes, sizeof(brushes)/sizeof(brushes[0]), sizeof(int), compare);
-    paint(&image, &image_info, 1.0, brushes, sizeof(brushes)/sizeof(brushes[0]));
+    paint(image, image_info, 1.0, brushes, sizeof(brushes)/sizeof(brushes[0]));
 
   /*
     Destroy the image and exit.
