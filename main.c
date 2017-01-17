@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 #include <MagickCore/MagickCore.h>
+#include <sys/time.h>
 
 #define MagickMax(x,y)  (((x) > (y)) ? (x) : (y))
 #define MagickMin(x,y)  (((x) < (y)) ? (x) : (y))
@@ -289,6 +290,11 @@ void paint_layer(Image *canvas, Image *reference, double stroke_threshold, doubl
 
   ssize_t grid = brush_size * gaussian_multiplier;
 
+  ssize_t num_points = ceil((double)reference->rows/grid)*ceil((double)reference->columns/grid);
+
+  PointInfo* points = malloc(num_points*sizeof(PointInfo));
+  size_t i;
+
   // Traverse Each Row
   ssize_t y;
   for (y=0; y < (ssize_t) reference->rows; y+=grid)
@@ -306,10 +312,32 @@ void paint_layer(Image *canvas, Image *reference, double stroke_threshold, doubl
 
       if (area_error > stroke_threshold)
       {
-        paint_stroke(canvas, reference, max_x, max_y, brush_size, exception);
+        points[i].x = max_x;
+        points[i].y = max_y;
+        i++;
       }
     }
   }
+
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  int usec = tv.tv_usec;
+  srand48(usec);
+
+  if (num_points > 1) {
+      for (i = num_points - 1; i > 0; i--) {
+          size_t j = (unsigned int) (drand48()*(i+1));
+          PointInfo t = points[j];
+          points[j] = points[i];
+          points[i] = t;
+      }
+  }
+
+  for (i = 0; i < num_points; i++){
+    paint_stroke(canvas, reference, points[i].x, points[i].y, brush_size, exception);
+  }
+
+  free(points);
 
   return;
 }
