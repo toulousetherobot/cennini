@@ -165,7 +165,7 @@ void paint_stroke(Image *canvas, Image *reference, ssize_t x, ssize_t y, int bru
   DrawInfo *clone_info;
   clone_info=CloneDrawInfo((ImageInfo *) NULL, (DrawInfo*) NULL);
   char buffer[MaxTextExtent];
-  snprintf(buffer, MaxTextExtent, "circle %zd,%zd %zd,%zd", x,y, x+brush_size*3/4, y+brush_size*3/2);
+  snprintf(buffer, MaxTextExtent, "circle %zd,%zd %zd,%zd", x,y, x, y+brush_size/2);
   CloneString(&clone_info->primitive, buffer);
 
   CacheView *reference_view;
