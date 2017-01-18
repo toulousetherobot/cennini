@@ -4,6 +4,11 @@
 #include <string.h>
 #include <time.h>
 #include <MagickCore/MagickCore.h>
+#include <sys/time.h>
+
+#define MagickMax(x,y)  (((x) > (y)) ? (x) : (y))
+#define MagickMin(x,y)  (((x) < (y)) ? (x) : (y))
+
 
 static inline MagickBooleanType SetImageProgress(const Image *image, const char *tag,const MagickOffsetType offset,const MagickSizeType extent)
 {
@@ -154,7 +159,190 @@ const char *get_filename_ext(const char *filename) {
     return dot + 1;
 }
 
-void paint(Image *image, ImageInfo *image_info, double gaussian_multiplier, int brushes[], int brushes_size, ExceptionInfo *exception)
+void paint_stroke(Image *canvas, Image *reference, ssize_t x, ssize_t y, int brush_size, ExceptionInfo *exception)
+{
+
+  DrawInfo *clone_info;
+  clone_info=CloneDrawInfo((ImageInfo *) NULL, (DrawInfo*) NULL);
+  char buffer[MaxTextExtent];
+  snprintf(buffer, MaxTextExtent, "circle %zd,%zd %zd,%zd", x,y, x, y+brush_size/2);
+  CloneString(&clone_info->primitive, buffer);
+
+  CacheView *reference_view;
+  reference_view = AcquireVirtualCacheView(reference, exception);
+
+  const Quantum *p;
+  p = GetCacheViewVirtualPixels(reference_view, x, y, 1, 1, exception);
+
+  clone_info->fill.red   = GetPixelRed(reference, p);
+  clone_info->fill.green = GetPixelGreen(reference, p);
+  clone_info->fill.blue  = GetPixelBlue(reference, p);
+
+  reference_view = DestroyCacheView(reference_view);
+
+  DrawImage(canvas, clone_info, exception);
+
+  clone_info = DestroyDrawInfo(clone_info);
+
+  return;
+}
+
+double region_error(Image *canvas, Image *reference, ssize_t x, ssize_t y, size_t columns, size_t rows, ssize_t *max_x, ssize_t *max_y, ExceptionInfo *exception)
+{
+
+  CacheView *canvas_view, *reference_view;
+
+  // Check if Image is Properly Defined
+  assert(canvas != (Image *) NULL);
+  assert(canvas->signature == MagickCoreSignature);
+
+  // Check if Reference Image is Properly Defined
+  assert(reference != (const Image *) NULL);
+  assert(reference->signature == MagickCoreSignature);
+
+  // Use canvas with maximum rows / columns
+  rows = MagickMin(y + rows , MagickMax(canvas->rows, reference->rows));
+  columns = MagickMin(x + columns , MagickMax(canvas->columns, reference->columns));
+
+  // Construct the Image Views
+  canvas_view=AcquireVirtualCacheView(canvas, exception);
+  reference_view=AcquireVirtualCacheView(reference, exception);
+
+  double total_error = 0;
+  double max_error = 0;
+  ssize_t starting_x = x;
+
+  // Traverse Each Row
+  for (; y < (ssize_t) rows; y++)
+  {
+    register const Quantum
+      *magick_restrict p,
+      *magick_restrict q;
+
+    // Request Each Row of Pixles
+    p=GetCacheViewVirtualPixels(canvas_view, 0, y, columns, 1, exception);
+    q=GetCacheViewVirtualPixels(reference_view, 0, y, columns, 1, exception);
+
+    // If either row is empty we're done. 
+    if ((p == (const Quantum *) NULL) || (q == (Quantum *) NULL))
+      break;      
+
+    // Traverse Each Column
+    for (x=starting_x; x < (ssize_t) columns; x++)
+    {
+
+      if (GetPixelWriteMask(canvas, p) == 0)
+      {
+        p+=GetPixelChannels(canvas);
+        q+=GetPixelChannels(reference);
+        continue;
+      }
+
+      double error = 0;
+
+      // Traverse Each Pixel Channel
+      register ssize_t i;
+      for (i=0; i < (ssize_t) GetPixelChannels(canvas); i++)
+      {
+
+        PixelChannel channel=GetPixelChannelChannel(canvas,i);
+
+        PixelTrait traits=GetPixelChannelTraits(canvas, channel);
+        PixelTrait reconstruct_traits=GetPixelChannelTraits(reference, channel);
+
+        if ((traits == UndefinedPixelTrait) || (reconstruct_traits == UndefinedPixelTrait) || ((reconstruct_traits & UpdatePixelTrait) == 0))
+          continue;
+
+        error += pow(p[i]-(double) GetPixelChannel(reference, channel, q), 2);
+
+      }
+
+      error = sqrt(error);
+
+      if (error > max_error)
+      {
+        max_error = error;
+        *max_x = x;
+        *max_y = y;
+      }
+
+      total_error += error;
+
+      p+=GetPixelChannels(canvas);
+      q+=GetPixelChannels(reference);
+
+    }
+
+  }
+
+  // Clean Up
+  reference_view=DestroyCacheView(reference_view);
+  canvas_view=DestroyCacheView(canvas_view);
+
+  return total_error;
+}
+
+void paint_layer(Image *canvas, Image *reference, double stroke_threshold, double gaussian_multiplier, int brush_size, ExceptionInfo *exception)
+{
+  // Check if Exception is Properly Defined
+  assert(exception != (ExceptionInfo *) NULL);
+  assert(exception->signature == MagickCoreSignature);
+
+  ssize_t grid = brush_size * gaussian_multiplier;
+
+  ssize_t num_points = ceil((double)reference->rows/grid)*ceil((double)reference->columns/grid);
+
+  PointInfo* points = malloc(num_points*sizeof(PointInfo));
+  size_t i;
+
+  // Traverse Each Row
+  ssize_t y;
+  for (y=0; y < (ssize_t) reference->rows; y+=grid)
+  {
+    // Traverse Each Column
+    ssize_t x;
+    for (x=0; x < (ssize_t) reference->columns; x+=grid)
+    {
+      double area_error = 0;
+      ssize_t max_x, max_y; 
+
+      // Fetch Pixles in Ref & Canvas near (x,y)
+      area_error = region_error(canvas, reference, x, y, grid, grid, &max_x, &max_y, exception);
+      area_error = area_error/pow(grid, 2);
+
+      if (area_error > stroke_threshold)
+      {
+        points[i].x = max_x;
+        points[i].y = max_y;
+        i++;
+      }
+    }
+  }
+
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  int usec = tv.tv_usec;
+  srand48(usec);
+
+  if (num_points > 1) {
+      for (i = num_points - 1; i > 0; i--) {
+          size_t j = (unsigned int) (drand48()*(i+1));
+          PointInfo t = points[j];
+          points[j] = points[i];
+          points[i] = t;
+      }
+  }
+
+  for (i = 0; i < num_points; i++){
+    paint_stroke(canvas, reference, points[i].x, points[i].y, brush_size, exception);
+  }
+
+  free(points);
+
+  return;
+}
+
+void paint(Image *image, ImageInfo *image_info, double stroke_threshold, double gaussian_multiplier, int brushes[], int brushes_size, ExceptionInfo *exception)
 {
   // Check if Exception is Properly Defined
   assert(exception != (ExceptionInfo *) NULL);
@@ -190,6 +378,13 @@ void paint(Image *image, ImageInfo *image_info, double gaussian_multiplier, int 
       reference = GaussianBlurImage(image, 0, gaussian_blur_sigma, exception);
       if (reference == (Image *) NULL)
         MagickError(exception->severity, exception->reason, exception->description);
+  
+    /*
+      Paint the Layer
+    */
+      paint_layer(canvas, reference, stroke_threshold, gaussian_multiplier, brushes[i], exception);
+      if (exception->severity != UndefinedException)
+        CatchException(exception);
 
     /*
       Annotate ReferenceImage for Diagonistic Purposes
@@ -280,7 +475,7 @@ int main(int argc,char **argv)
   */
     int brushes[] = {10, 20, 30};
     qsort(brushes, sizeof(brushes)/sizeof(brushes[0]), sizeof(int), compare);
-    paint(image, image_info, 1.0, brushes, sizeof(brushes)/sizeof(brushes[0]), exception);
+    paint(image, image_info, 0.0, 1.0, brushes, sizeof(brushes)/sizeof(brushes[0]), exception);
     if (exception->severity != UndefinedException)
       CatchException(exception);
 
