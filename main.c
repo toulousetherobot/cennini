@@ -5,6 +5,7 @@
 #include <time.h>
 #include <MagickCore/MagickCore.h>
 #include <sys/time.h>
+#include <math.h>
 
 #define MagickMax(x,y)  (((x) > (y)) ? (x) : (y))
 #define MagickMin(x,y)  (((x) < (y)) ? (x) : (y))
@@ -188,6 +189,126 @@ const char *get_filename_ext(const char *filename) {
     return dot + 1;
 }
 
+struct _CacheView
+{
+  Image *image;
+};
+
+Quantum PixelLuminance (Image *image, const Quantum *p)
+{
+  return 0.30 * GetPixelRed(image, p) + 0.59 * GetPixelGreen(image, p) + 0.11 * GetPixelBlue(image, p);
+}
+
+double ColorDifference(Image *canvas, Image *reference, const Quantum *magick_restrict p, const Quantum *magick_restrict q)
+{
+  double error = 0;
+
+  // Traverse Each Pixel Channel
+  register ssize_t i;
+  for (i=0; i < (ssize_t) GetPixelChannels(canvas); i++)
+  {
+    PixelChannel channel=GetPixelChannelChannel(canvas,i);
+
+    PixelTrait traits=GetPixelChannelTraits(canvas, channel);
+    PixelTrait reconstruct_traits=GetPixelChannelTraits(reference, channel);
+
+    if ((traits == UndefinedPixelTrait) || (reconstruct_traits == UndefinedPixelTrait) || ((reconstruct_traits & UpdatePixelTrait) == 0))
+      continue;
+
+    error += pow(p[i]-(double) GetPixelChannel(reference, channel, q), 2);
+
+  }
+
+  return sqrt(error);
+} 
+
+void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x, CacheView *sobel_y, ssize_t x, ssize_t y, double stroke_threshold, int brush_size, ExceptionInfo *exception)
+{
+
+  DrawInfo *clone_info;
+  clone_info=CloneDrawInfo((ImageInfo *) NULL, (DrawInfo*) NULL);
+
+  const Quantum *r;
+  r = GetCacheViewVirtualPixels(reference, x, y, 1, 1, exception);
+
+  clone_info->fill.red   = GetPixelRed(reference->image, r);
+  clone_info->fill.green = GetPixelGreen(reference->image, r);
+  clone_info->fill.blue  = GetPixelBlue(reference->image, r);
+
+  char buffer[MaxTextExtent];
+  int n;
+  n = snprintf(buffer, MaxTextExtent, "bezier %zd,%zd ", x,y);
+
+  ssize_t i, max_stroke_length, min_stroke_length;
+  max_stroke_length = 15;
+  min_stroke_length = 5;
+
+  float fc = 1;
+
+  float dx, dy, prev_dx, prev_dy;
+  dx = 0;
+  dy = 0;
+  prev_dx = 0;
+  prev_dy = 0;
+
+  for (i = 1; i < max_stroke_length; i++)
+  {
+    const Quantum *p, *q;
+    p = GetCacheViewVirtualPixels(sobel_x, x, y, 1, 1, exception);
+    q = GetCacheViewVirtualPixels(sobel_y, x, y, 1, 1, exception);
+
+    // If the color of the stroke deviates from the color under a control point of the curve by more than a specified threshold, the stroke ends at that control point.
+    if ((i > min_stroke_length) && (ColorDifference(canvas, reference->image, p, q) > stroke_threshold))
+      break;      
+
+    Quantum lum_x =PixelLuminance(sobel_x->image, p);
+    Quantum lum_y =PixelLuminance(sobel_y->image, q);
+
+    // Detect if the Gradient is Vanishing
+    if (sqrt(pow(lum_x,2) + pow(lum_y,2)) == 0)
+      return;      
+
+    // Get Unit Vector of Gradient
+    float theta = atan(lum_y/lum_x);
+    dx = -sin(theta);
+    dy = cos(theta);
+
+    // If Necessary, Reverse Direction
+    if (prev_dx * dx + prev_dy * dy < 0)
+    {
+      dx = -dx;
+      dy = -dy;
+    }
+
+    // Filter the stroke direction
+    dx = fc * dx + (1-fc) * prev_dx;
+    dy = fc * dy + (1-fc) * prev_dy;
+
+    float magnitude = sqrt(pow(dx,2) + pow(dy,2));
+
+    dx = dx/magnitude;
+    dy = dy/magnitude;
+
+    x = x + brush_size * dx;
+    y = y + brush_size * dy;
+
+    prev_dx = dx;
+    prev_dy = dy;
+
+    // Add Control Point to DrawInfo
+    n = n + snprintf(buffer+n, MaxTextExtent-n, "%zd,%zd ", x,y);
+  }
+
+  // Add Stroke to Canvas
+  CloneString(&clone_info->primitive, buffer);
+  DrawImage(canvas, clone_info, exception);
+
+  // Clean Up
+  clone_info = DestroyDrawInfo(clone_info);
+
+  return;
+}
+
 void paint_stroke(Image *canvas, Image *reference, ssize_t x, ssize_t y, int brush_size, ExceptionInfo *exception)
 {
 
@@ -319,10 +440,20 @@ void paint_layer(Image *canvas, Image *reference, double stroke_threshold, doubl
 
   ssize_t grid = brush_size * gaussian_multiplier;
 
+  Image *sobel_x_filter, *sobel_y_filter;
+  sobel_x_filter = SobelOperator(reference, SobelXFilter, exception);
+  sobel_y_filter = SobelOperator(reference, SobelYFilter, exception);
+
+  // Pull Stroke Colour
+  CacheView *reference_view, *sobel_x_view, *sobel_y_view;
+  reference_view = AcquireVirtualCacheView(reference, exception);
+  sobel_x_view = AcquireVirtualCacheView(sobel_x_filter, exception);
+  sobel_y_view = AcquireVirtualCacheView(sobel_y_filter, exception);
+
   ssize_t num_points = ceil((double)reference->rows/grid)*ceil((double)reference->columns/grid);
 
   PointInfo* points = malloc(num_points*sizeof(PointInfo));
-  size_t i;
+  size_t i = 0;
 
   // Traverse Each Row
   ssize_t y;
@@ -334,6 +465,8 @@ void paint_layer(Image *canvas, Image *reference, double stroke_threshold, doubl
     {
       double area_error = 0;
       ssize_t max_x, max_y; 
+      max_y = 0;
+      max_x = 0;
 
       // Fetch Pixles in Ref & Canvas near (x,y)
       area_error = region_error(canvas, reference, x, y, grid, grid, &max_x, &max_y, exception);
@@ -363,10 +496,17 @@ void paint_layer(Image *canvas, Image *reference, double stroke_threshold, doubl
   }
 
   for (i = 0; i < num_points; i++){
-    paint_stroke(canvas, reference, points[i].x, points[i].y, brush_size, exception);
+    paint_spline_stroke(canvas, reference_view, sobel_x_view, sobel_y_view, points[i].x, points[i].y, stroke_threshold, brush_size, exception);
   }
 
   free(points);
+
+  reference_view = DestroyCacheView(reference_view);
+  sobel_x_view = DestroyCacheView(sobel_x_view);
+  sobel_y_view = DestroyCacheView(sobel_y_view);
+
+  sobel_x_filter = DestroyImage(sobel_x_filter);
+  sobel_y_filter = DestroyImage(sobel_y_filter);
 
   return;
 }
