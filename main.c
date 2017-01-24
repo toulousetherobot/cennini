@@ -231,9 +231,14 @@ void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x
   const Quantum *r;
   r = GetCacheViewVirtualPixels(reference, x, y, 1, 1, exception);
 
-  clone_info->fill.red   = GetPixelRed(reference->image, r);
-  clone_info->fill.green = GetPixelGreen(reference->image, r);
-  clone_info->fill.blue  = GetPixelBlue(reference->image, r);
+  clone_info->fill.alpha  = 0;
+
+  QueryColorCompliance("green", AllCompliance, &clone_info->stroke, exception);
+  clone_info->stroke.red   = GetPixelRed(reference->image, r);
+  clone_info->stroke.green = GetPixelGreen(reference->image, r);
+  clone_info->stroke.blue  = GetPixelBlue(reference->image, r);
+
+  clone_info->stroke_width = brush_size;
 
   char buffer[MaxTextExtent];
   int n;
