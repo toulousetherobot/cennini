@@ -222,7 +222,7 @@ double ColorDifference(Image *canvas, Image *reference, const Quantum *magick_re
   return sqrt(error);
 } 
 
-void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x, CacheView *sobel_y, ssize_t x, ssize_t y, int brush_size, double stroke_threshold, int max_stroke_length, int min_stroke_length, ExceptionInfo *exception)
+void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x, CacheView *sobel_y, ssize_t x, ssize_t y, int brush_size, double stroke_threshold, float curvature_filter, int max_stroke_length, int min_stroke_length, ExceptionInfo *exception)
 {
 
   DrawInfo *clone_info;
@@ -242,8 +242,6 @@ void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x
 
   char buffer[MaxTextExtent];
   int n = snprintf(buffer, MaxTextExtent, "bezier %zd,%zd ", x,y);
-
-  float fc = 1;
 
   float dx, dy, prev_dx, prev_dy;
   dx = 0;  dy = 0;  prev_dx = 0;  prev_dy = 0;
@@ -279,8 +277,8 @@ void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x
     }
 
     // Filter the stroke direction
-    dx = fc * dx + (1-fc) * prev_dx;
-    dy = fc * dy + (1-fc) * prev_dy;
+    dx = curvature_filter * dx + (1-curvature_filter) * prev_dx;
+    dy = curvature_filter * dy + (1-curvature_filter) * prev_dy;
 
     float magnitude = sqrt(pow(dx,2) + pow(dy,2));
 
@@ -430,7 +428,7 @@ double region_error(Image *canvas, Image *reference, ssize_t x, ssize_t y, size_
   return total_error;
 }
 
-void paint_layer(Image *canvas, Image *reference, double stroke_threshold, int max_stroke_length, int min_stroke_length, double gaussian_multiplier, int brush_size, ExceptionInfo *exception)
+void paint_layer(Image *canvas, Image *reference, double stroke_threshold, float curvature_filter, int max_stroke_length, int min_stroke_length, double gaussian_multiplier, int brush_size, ExceptionInfo *exception)
 {
   // Check if Exception is Properly Defined
   assert(exception != (ExceptionInfo *) NULL);
@@ -494,7 +492,7 @@ void paint_layer(Image *canvas, Image *reference, double stroke_threshold, int m
   }
 
   for (i = 0; i < num_points; i++){
-    paint_spline_stroke(canvas, reference_view, sobel_x_view, sobel_y_view, points[i].x, points[i].y, brush_size, stroke_threshold, max_stroke_length, min_stroke_length, exception);
+    paint_spline_stroke(canvas, reference_view, sobel_x_view, sobel_y_view, points[i].x, points[i].y, brush_size, stroke_threshold, curvature_filter, max_stroke_length, min_stroke_length, exception);
   }
 
   free(points);
@@ -509,7 +507,7 @@ void paint_layer(Image *canvas, Image *reference, double stroke_threshold, int m
   return;
 }
 
-void paint(Image *image, ImageInfo *image_info, double stroke_threshold, int max_stroke_length, int min_stroke_length, double gaussian_multiplier, int brushes[], int brushes_size, ExceptionInfo *exception)
+void paint(Image *image, ImageInfo *image_info, double stroke_threshold, float curvature_filter, int max_stroke_length, int min_stroke_length, double gaussian_multiplier, int brushes[], int brushes_size, ExceptionInfo *exception)
 {
   // Check if Exception is Properly Defined
   assert(exception != (ExceptionInfo *) NULL);
@@ -549,7 +547,7 @@ void paint(Image *image, ImageInfo *image_info, double stroke_threshold, int max
     /*
       Paint the Layer
     */
-      paint_layer(canvas, reference, stroke_threshold, max_stroke_length, min_stroke_length, gaussian_multiplier, brushes[i], exception);
+      paint_layer(canvas, reference, stroke_threshold, curvature_filter, max_stroke_length, min_stroke_length, gaussian_multiplier, brushes[i], exception);
       if (exception->severity != UndefinedException)
         CatchException(exception);
 
@@ -647,8 +645,9 @@ int main(int argc,char **argv)
     int max_stroke_length = 15;
     int min_stroke_length = 5;
     double gaussian_multiplier = 1.0;
+    float curvature_filter = 1.0;
 
-    paint(image, image_info, stroke_threshold, max_stroke_length, min_stroke_length, gaussian_multiplier, brushes, sizeof(brushes)/sizeof(brushes[0]), exception);    
+    paint(image, image_info, stroke_threshold, curvature_filter, max_stroke_length, min_stroke_length, gaussian_multiplier, brushes, sizeof(brushes)/sizeof(brushes[0]), exception);    
     if (exception->severity != UndefinedException)
       CatchException(exception);
 
