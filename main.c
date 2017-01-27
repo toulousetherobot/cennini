@@ -45,16 +45,19 @@ int main(int argc,char **argv)
   /*
     Start the Painting Subroutine.
   */
-    int brushes[] = {4, 6, 8};
+    int brushes[] = {4, 8, 30};
     qsort(brushes, sizeof(brushes)/sizeof(brushes[0]), sizeof(int), compare);
-    
-    double stroke_threshold = 0.0;
-    int max_stroke_length = 15;
-    int min_stroke_length = 2;
-    double gaussian_multiplier = 1.0;
-    float curvature_filter = 1.0;
 
-    paint(image, image_info, stroke_threshold, curvature_filter, max_stroke_length, min_stroke_length, gaussian_multiplier, brushes, sizeof(brushes)/sizeof(brushes[0]), exception);    
+    PaintInfo paint_info = {
+      .stroke_threshold = 4000.0,
+      .min_stroke_length = 2,
+      .max_stroke_length = 15,
+      .gaussian_multiplier = 1.0,
+      .curvature_filter = 1.0,
+      .signature = MagickCoreSignature
+    };
+
+    paint(image, image_info, brushes, sizeof(brushes)/sizeof(brushes[0]), &paint_info, exception);    
     if (exception->severity != UndefinedException)
       CatchException(exception);
 

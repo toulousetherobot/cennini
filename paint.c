@@ -150,9 +150,27 @@ MagickExport Image *BlankCanvasFromImage(const Image *image, const Quantum quant
   return(separate_image);
 }
 
-
-void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x, CacheView *sobel_y, ssize_t x, ssize_t y, int brush_size, double stroke_threshold, float curvature_filter, int max_stroke_length, int min_stroke_length, ExceptionInfo *exception)
+void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x, CacheView *sobel_y, ssize_t x, ssize_t y, int brush_size, PaintInfo *paint_info, ExceptionInfo *exception)
 {
+
+  // Image is Properly Defined
+  assert(canvas != (Image *) NULL);
+  assert(canvas->signature == MagickCoreSignature);
+
+  // Reference Cache View is Properly Defined
+  assert(reference != (CacheView *) NULL);
+
+  // Sobel X & Y are Properly Defined
+  assert(sobel_x != (CacheView *) NULL);
+  assert(sobel_y != (CacheView *) NULL);
+
+  // PaintInfo is Properly Defined
+  assert(paint_info != (PaintInfo *) NULL);
+  assert(paint_info->signature == MagickCoreSignature);
+
+  // Exception is Properly Defined
+  assert(exception != (ExceptionInfo *) NULL);
+  assert(exception->signature == MagickCoreSignature);
 
   DrawInfo *clone_info;
   clone_info=CloneDrawInfo((ImageInfo *) NULL, (DrawInfo*) NULL);
@@ -176,14 +194,14 @@ void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x
   dx = 0;  dy = 0;  prev_dx = 0;  prev_dy = 0;
 
   int i;
-  for (i = 1; i < max_stroke_length; i++)
+  for (i = 1; i < paint_info->max_stroke_length; i++)
   {
     const Quantum *p, *q;
     p = GetCacheViewVirtualPixels(sobel_x, x, y, 1, 1, exception);
     q = GetCacheViewVirtualPixels(sobel_y, x, y, 1, 1, exception);
 
     // If the color of the stroke deviates from the color under a control point of the curve by more than a specified threshold, the stroke ends at that control point.
-    if ((i > min_stroke_length) && (ColorDifference(canvas, reference->image, p, q) > stroke_threshold))
+    if ((i > paint_info->min_stroke_length) && (ColorDifference(canvas, reference->image, p, q) > paint_info->stroke_threshold))
       break;      
 
     Quantum lum_x =PixelLuminance(sobel_x->image, p);
@@ -206,8 +224,8 @@ void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x
     }
 
     // Filter the stroke direction
-    dx = curvature_filter * dx + (1-curvature_filter) * prev_dx;
-    dy = curvature_filter * dy + (1-curvature_filter) * prev_dy;
+    dx = paint_info->curvature_filter * dx + (1-paint_info->curvature_filter) * prev_dx;
+    dy = paint_info->curvature_filter * dy + (1-paint_info->curvature_filter) * prev_dy;
 
     float magnitude = sqrt(pow(dx,2) + pow(dy,2));
 
@@ -236,6 +254,17 @@ void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x
 
 void paint_stroke(Image *canvas, Image *reference, ssize_t x, ssize_t y, int brush_size, ExceptionInfo *exception)
 {
+  // Image is Properly Defined
+  assert(canvas != (Image *) NULL);
+  assert(canvas->signature == MagickCoreSignature);
+
+  // Reference is Properly Defined
+  assert(reference != (Image *) NULL);
+  assert(reference->signature == MagickCoreSignature);
+
+  // Exception is Properly Defined
+  assert(exception != (ExceptionInfo *) NULL);
+  assert(exception->signature == MagickCoreSignature);
 
   DrawInfo *clone_info;
   clone_info=CloneDrawInfo((ImageInfo *) NULL, (DrawInfo*) NULL);
@@ -262,13 +291,26 @@ void paint_stroke(Image *canvas, Image *reference, ssize_t x, ssize_t y, int bru
   return;
 }
 
-void paint_layer(Image *canvas, Image *reference, double stroke_threshold, float curvature_filter, int max_stroke_length, int min_stroke_length, double gaussian_multiplier, int brush_size, ExceptionInfo *exception)
+void paint_layer(Image *canvas, Image *reference, int brush_size, PaintInfo *paint_info, ExceptionInfo *exception)
 {
-  // Check if Exception is Properly Defined
+
+  // Image is Properly Defined
+  assert(canvas != (Image *) NULL);
+  assert(canvas->signature == MagickCoreSignature);
+
+  // Reference is Properly Defined
+  assert(reference != (Image *) NULL);
+  assert(reference->signature == MagickCoreSignature);
+
+  // PaintInfo is Properly Defined
+  assert(paint_info != (PaintInfo *) NULL);
+  assert(paint_info->signature == MagickCoreSignature);
+
+  // Exception is Properly Defined
   assert(exception != (ExceptionInfo *) NULL);
   assert(exception->signature == MagickCoreSignature);
 
-  ssize_t grid = brush_size * gaussian_multiplier;
+  ssize_t grid = brush_size * paint_info->gaussian_multiplier;
 
   Image *sobel_x_filter, *sobel_y_filter;
   sobel_x_filter = SobelOperator(reference, SobelXFilter, exception);
@@ -302,7 +344,7 @@ void paint_layer(Image *canvas, Image *reference, double stroke_threshold, float
       area_error = region_error(canvas, reference, x, y, grid, grid, &max_x, &max_y, exception);
       area_error = area_error/pow(grid, 2);
 
-      if (area_error > stroke_threshold)
+      if (area_error > paint_info->stroke_threshold)
       {
         points[i].x = max_x;
         points[i].y = max_y;
@@ -326,7 +368,7 @@ void paint_layer(Image *canvas, Image *reference, double stroke_threshold, float
   }
 
   for (i = 0; i < num_points; i++){
-    paint_spline_stroke(canvas, reference_view, sobel_x_view, sobel_y_view, points[i].x, points[i].y, brush_size, stroke_threshold, curvature_filter, max_stroke_length, min_stroke_length, exception);
+    paint_spline_stroke(canvas, reference_view, sobel_x_view, sobel_y_view, points[i].x, points[i].y, brush_size, paint_info, exception);
   }
 
   free(points);
@@ -341,9 +383,21 @@ void paint_layer(Image *canvas, Image *reference, double stroke_threshold, float
   return;
 }
 
-void paint(Image *image, ImageInfo *image_info, double stroke_threshold, float curvature_filter, int max_stroke_length, int min_stroke_length, double gaussian_multiplier, int brushes[], int brushes_size, ExceptionInfo *exception)
+void paint(Image *image, ImageInfo *image_info, int brushes[], int brushes_size, PaintInfo *paint_info, ExceptionInfo *exception)
 {
-  // Check if Exception is Properly Defined
+  // Image is Properly Defined
+  assert(image != (Image *) NULL);
+  assert(image->signature == MagickCoreSignature);
+
+  // ImageInfo is Properly Defined
+  assert(image_info != (ImageInfo *) NULL);
+  assert(image_info->signature == MagickCoreSignature);
+
+  // PaintInfo is Properly Defined
+  assert(paint_info != (PaintInfo *) NULL);
+  assert(paint_info->signature == MagickCoreSignature);
+
+  // Exception is Properly Defined
   assert(exception != (ExceptionInfo *) NULL);
   assert(exception->signature == MagickCoreSignature);
 
@@ -373,7 +427,7 @@ void paint(Image *image, ImageInfo *image_info, double stroke_threshold, float c
     /*
       Apply a Gaussian Blur to the Image
     */
-      double gaussian_blur_sigma = gaussian_multiplier * brushes[i];
+      double gaussian_blur_sigma = paint_info->gaussian_multiplier * brushes[i];
       reference = GaussianBlurImage(image, 0, gaussian_blur_sigma, exception);
       if (reference == (Image *) NULL)
         MagickError(exception->severity, exception->reason, exception->description);
@@ -381,7 +435,7 @@ void paint(Image *image, ImageInfo *image_info, double stroke_threshold, float c
     /*
       Paint the Layer
     */
-      paint_layer(canvas, reference, stroke_threshold, curvature_filter, max_stroke_length, min_stroke_length, gaussian_multiplier, brushes[i], exception);
+      paint_layer(canvas, reference, brushes[i], paint_info, exception);
       if (exception->severity != UndefinedException)
         CatchException(exception);
 
