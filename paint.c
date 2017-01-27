@@ -18,22 +18,8 @@ const char *get_filename_ext(const char *filename)
     return dot + 1;
 }
 
-static inline MagickBooleanType SetImageProgress(const Image *image, const char *tag,const MagickOffsetType offset,const MagickSizeType extent)
-{
-  char
-    message[MagickPathExtent];
-
-  if (image->progress_monitor == (MagickProgressMonitor) NULL)
-    return(MagickTrue);
-  (void) FormatLocaleString(message,MagickPathExtent,"%s/%s",tag,
-    image->filename);
-  return(image->progress_monitor(message,offset,extent,image->client_data));
-}
-
-
 MagickExport Image *BlankCanvasFromImage(const Image *image, const Quantum quantum, ExceptionInfo *exception)
 {
-  #define BlankCanvasTag  "BlankCanvas/Image"
 
   CacheView *image_view, *separate_view;
 
@@ -130,14 +116,6 @@ MagickExport Image *BlankCanvasFromImage(const Image *image, const Quantum quant
 
     if (SyncCacheViewAuthenticPixels(separate_view,exception) == MagickFalse)
       status = MagickFalse;
-
-    if (image->progress_monitor != (MagickProgressMonitor) NULL)
-      {
-        MagickBooleanType proceed;
-        proceed=SetImageProgress(image,BlankCanvasTag,progress++,image->rows);
-        if (proceed == MagickFalse)
-          status=MagickFalse;
-      }
   }
 
   // Clean Up

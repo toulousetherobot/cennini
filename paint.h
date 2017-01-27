@@ -22,8 +22,6 @@ typedef struct _PaintInfo
 
 const char *get_filename_ext(const char *filename);
 
-static inline MagickBooleanType SetImageProgress(const Image *image, const char *tag,const MagickOffsetType offset,const MagickSizeType extent);
-
 MagickExport Image *BlankCanvasFromImage(const Image *image, const Quantum quantum, ExceptionInfo *exception);
 
 void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x, CacheView *sobel_y, ssize_t x, ssize_t y, int brush_size, PaintInfo *paint_info, ExceptionInfo *exception);
