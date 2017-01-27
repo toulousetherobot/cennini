@@ -53,7 +53,8 @@ int main(int argc,char **argv)
       .min_stroke_length = 2,
       .max_stroke_length = 15,
       .gaussian_multiplier = 1.0,
-      .curvature_filter = 1.0
+      .curvature_filter = 1.0,
+      .signature = MagickCoreSignature
     };
 
     paint(image, image_info, brushes, sizeof(brushes)/sizeof(brushes[0]), &paint_info, exception);    

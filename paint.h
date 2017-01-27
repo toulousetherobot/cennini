@@ -16,6 +16,8 @@ typedef struct _PaintInfo
 	int
 		min_stroke_length,
 		max_stroke_length;
+	size_t
+		signature;
 } PaintInfo;
 
 const char *get_filename_ext(const char *filename);

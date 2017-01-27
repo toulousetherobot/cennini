@@ -153,6 +153,25 @@ MagickExport Image *BlankCanvasFromImage(const Image *image, const Quantum quant
 void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x, CacheView *sobel_y, ssize_t x, ssize_t y, int brush_size, PaintInfo *paint_info, ExceptionInfo *exception)
 {
 
+  // Image is Properly Defined
+  assert(canvas != (Image *) NULL);
+  assert(canvas->signature == MagickCoreSignature);
+
+  // Reference Cache View is Properly Defined
+  assert(reference != (CacheView *) NULL);
+
+  // Sobel X & Y are Properly Defined
+  assert(sobel_x != (CacheView *) NULL);
+  assert(sobel_y != (CacheView *) NULL);
+
+  // PaintInfo is Properly Defined
+  assert(paint_info != (PaintInfo *) NULL);
+  assert(paint_info->signature == MagickCoreSignature);
+
+  // Exception is Properly Defined
+  assert(exception != (ExceptionInfo *) NULL);
+  assert(exception->signature == MagickCoreSignature);
+
   DrawInfo *clone_info;
   clone_info=CloneDrawInfo((ImageInfo *) NULL, (DrawInfo*) NULL);
 
@@ -235,6 +254,17 @@ void paint_spline_stroke(Image *canvas, CacheView *reference, CacheView *sobel_x
 
 void paint_stroke(Image *canvas, Image *reference, ssize_t x, ssize_t y, int brush_size, ExceptionInfo *exception)
 {
+  // Image is Properly Defined
+  assert(canvas != (Image *) NULL);
+  assert(canvas->signature == MagickCoreSignature);
+
+  // Reference is Properly Defined
+  assert(reference != (Image *) NULL);
+  assert(reference->signature == MagickCoreSignature);
+
+  // Exception is Properly Defined
+  assert(exception != (ExceptionInfo *) NULL);
+  assert(exception->signature == MagickCoreSignature);
 
   DrawInfo *clone_info;
   clone_info=CloneDrawInfo((ImageInfo *) NULL, (DrawInfo*) NULL);
@@ -263,7 +293,20 @@ void paint_stroke(Image *canvas, Image *reference, ssize_t x, ssize_t y, int bru
 
 void paint_layer(Image *canvas, Image *reference, int brush_size, PaintInfo *paint_info, ExceptionInfo *exception)
 {
-  // Check if Exception is Properly Defined
+
+  // Image is Properly Defined
+  assert(canvas != (Image *) NULL);
+  assert(canvas->signature == MagickCoreSignature);
+
+  // Reference is Properly Defined
+  assert(reference != (Image *) NULL);
+  assert(reference->signature == MagickCoreSignature);
+
+  // PaintInfo is Properly Defined
+  assert(paint_info != (PaintInfo *) NULL);
+  assert(paint_info->signature == MagickCoreSignature);
+
+  // Exception is Properly Defined
   assert(exception != (ExceptionInfo *) NULL);
   assert(exception->signature == MagickCoreSignature);
 
@@ -342,7 +385,19 @@ void paint_layer(Image *canvas, Image *reference, int brush_size, PaintInfo *pai
 
 void paint(Image *image, ImageInfo *image_info, int brushes[], int brushes_size, PaintInfo *paint_info, ExceptionInfo *exception)
 {
-  // Check if Exception is Properly Defined
+  // Image is Properly Defined
+  assert(image != (Image *) NULL);
+  assert(image->signature == MagickCoreSignature);
+
+  // ImageInfo is Properly Defined
+  assert(image_info != (ImageInfo *) NULL);
+  assert(image_info->signature == MagickCoreSignature);
+
+  // PaintInfo is Properly Defined
+  assert(paint_info != (PaintInfo *) NULL);
+  assert(paint_info->signature == MagickCoreSignature);
+
+  // Exception is Properly Defined
   assert(exception != (ExceptionInfo *) NULL);
   assert(exception->signature == MagickCoreSignature);
 
