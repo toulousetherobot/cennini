@@ -88,23 +88,7 @@ double region_error(Image *canvas, Image *reference, ssize_t x, ssize_t y, size_
       double error = 0;
 
       // Traverse Each Pixel Channel
-      register ssize_t i;
-      for (i=0; i < (ssize_t) GetPixelChannels(canvas); i++)
-      {
-
-        PixelChannel channel=GetPixelChannelChannel(canvas,i);
-
-        PixelTrait traits=GetPixelChannelTraits(canvas, channel);
-        PixelTrait reconstruct_traits=GetPixelChannelTraits(reference, channel);
-
-        if ((traits == UndefinedPixelTrait) || (reconstruct_traits == UndefinedPixelTrait) || ((reconstruct_traits & UpdatePixelTrait) == 0))
-          continue;
-
-        error += pow(p[i]-(double) GetPixelChannel(reference, channel, q), 2);
-
-      }
-
-      error = sqrt(error);
+      error = ColorDifference(canvas, reference, p, q);
 
       if (error > max_error)
       {
